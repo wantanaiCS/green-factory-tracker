@@ -3,6 +3,7 @@
 @using GreenFactory.Services
 @using GreenFactory.Models
 @inject EnergyService EnergyService
+@inject IDbContextFactory<AppDbContext> DbFactory
 
 <PageTitle>รายงาน - Green Factory</PageTitle>
 
@@ -34,7 +35,6 @@ else
                 </MudCardContent>
             </MudCard>
         </MudItem>
-
         <MudItem xs="12" md="6">
             <MudCard Elevation="3">
                 <MudCardHeader>
@@ -68,6 +68,7 @@ else
                     <MudTh><MudTableSortLabel SortBy="new Func<EnergyRecord, object>(x => x.kWh)">kWh</MudTableSortLabel></MudTh>
                     <MudTh><MudTableSortLabel SortBy="new Func<EnergyRecord, object>(x => x.WaterM3)">น้ำ (ลบ.ม.)</MudTableSortLabel></MudTh>
                     <MudTh><MudTableSortLabel SortBy="new Func<EnergyRecord, object>(x => x.CarbonKgCO2e)">Carbon (kgCO₂e)</MudTableSortLabel></MudTh>
+                    <MudTh>จัดการ</MudTh>
                 </HeaderContent>
                 <RowTemplate>
                     <MudTd>@context.Timestamp.ToString("dd/MM/yyyy HH:mm")</MudTd>
@@ -75,6 +76,14 @@ else
                     <MudTd>@context.kWh.ToString("N2")</MudTd>
                     <MudTd>@context.WaterM3.ToString("N2")</MudTd>
                     <MudTd>@context.CarbonKgCO2e.ToString("N2")</MudTd>
+                    <MudTd>
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                       Color="Color.Primary" Size="Size.Small"
+                                       OnClick="() => OpenEdit(context)" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                       Color="Color.Error" Size="Size.Small"
+                                       OnClick="() => OpenDelete(context)" />
+                    </MudTd>
                 </RowTemplate>
                 <PagerContent>
                     <MudTablePager PageSizeOptions="new int[]{10, 25, 50}" />
@@ -84,25 +93,77 @@ else
     </MudCard>
 }
 
+<!-- Dialog แก้ไข -->
+<MudDialog @bind-Visible="showEdit">
+    <TitleContent>✏️ แก้ไขข้อมูล</TitleContent>
+    <DialogContent>
+        @if (editModel != null)
+        {
+            <MudSelect T="string" Label="Line" @bind-Value="editModel.MeterName"
+                       Variant="Variant.Outlined" Class="mb-3">
+                <MudSelectItem Value="@("Line A")" />
+                <MudSelectItem Value="@("Line B")" />
+                <MudSelectItem Value="@("Line C")" />
+            </MudSelect>
+            <MudNumericField T="double" Label="พลังงาน (kWh)" @bind-Value="editModel.kWh"
+                             @bind-Value:after="RecalcEdit"
+                             Variant="Variant.Outlined" Class="mb-3" Min="0" />
+            <MudNumericField T="double" Label="น้ำ (ลบ.ม.)" @bind-Value="editModel.WaterM3"
+                             @bind-Value:after="RecalcEdit"
+                             Variant="Variant.Outlined" Class="mb-3" Min="0" />
+            <MudAlert Severity="Severity.Info">
+                Carbon: <b>@editCarbon.ToString("F2") kgCO₂e</b>
+            </MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => showEdit = false">ยกเลิก</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveEdit">บันทึก</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<!-- Dialog ยืนยันลบ -->
+<MudDialog @bind-Visible="showDelete">
+    <TitleContent>🗑️ ยืนยันการลบ</TitleContent>
+    <DialogContent>
+        <MudText>ต้องการลบข้อมูล <b>@deleteTarget?.MeterName</b> วันที่ <b>@deleteTarget?.Timestamp.ToString("dd/MM/yyyy HH:mm")</b> ใช่ไหม?</MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => showDelete = false">ยกเลิก</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="ConfirmDelete">ลบ</MudButton>
+    </DialogActions>
+</MudDialog>
+
 @code {
+    const double EmissionElec  = 0.4999;
+    const double EmissionWater = 0.708;
+
     private bool isLoading = true;
     private List<EnergyRecord> records = new();
     private string[] dateLabels = Array.Empty<string>();
     private List<ChartSeries<double>> energySeries = new();
     private List<ChartSeries<double>> carbonSeries = new();
 
-    protected override async Task OnInitializedAsync()
+    // Edit
+    private bool showEdit;
+    private EnergyRecord? editModel;
+    private double editCarbon;
+
+    // Delete
+    private bool showDelete;
+    private EnergyRecord? deleteTarget;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
     {
+        isLoading = true;
         records = await EnergyService.GetRecentRecordsAsync(50);
 
-        // สร้างข้อมูลกราฟ Trend 7 วัน
         var last7Days = Enumerable.Range(0, 7)
-            .Select(i => DateTime.Today.AddDays(-6 + i))
-            .ToList();
+            .Select(i => DateTime.Today.AddDays(-6 + i)).ToList();
 
-        dateLabels = last7Days
-            .Select(d => d.ToString("dd/MM"))
-            .ToArray();
+        dateLabels = last7Days.Select(d => d.ToString("dd/MM")).ToArray();
 
         var allRecords = await EnergyService.GetRecentRecordsAsync(500);
 
@@ -112,9 +173,7 @@ else
             {
                 Name = "พลังงาน (kWh)",
                 Data = last7Days.Select(day =>
-                    allRecords
-                        .Where(r => r.Timestamp.Date == day.Date)
-                        .Sum(r => r.kWh)
+                    allRecords.Where(r => r.Timestamp.Date == day.Date).Sum(r => r.kWh)
                 ).ToArray()
             }
         };
@@ -125,13 +184,74 @@ else
             {
                 Name = "Carbon (kgCO₂e)",
                 Data = last7Days.Select(day =>
-                    allRecords
-                        .Where(r => r.Timestamp.Date == day.Date)
-                        .Sum(r => r.CarbonKgCO2e)
+                    allRecords.Where(r => r.Timestamp.Date == day.Date).Sum(r => r.CarbonKgCO2e)
                 ).ToArray()
             }
         };
 
         isLoading = false;
+    }
+
+    // ---- Edit ----
+    private void OpenEdit(EnergyRecord r)
+    {
+        editModel = new EnergyRecord
+        {
+            Id = r.Id, MeterName = r.MeterName,
+            Timestamp = r.Timestamp,
+            kWh = r.kWh, WaterM3 = r.WaterM3,
+            CarbonKgCO2e = r.CarbonKgCO2e
+        };
+        RecalcEdit();
+        showEdit = true;
+    }
+
+    private void RecalcEdit()
+    {
+        if (editModel == null) return;
+        editCarbon = (editModel.kWh * EmissionElec) + (editModel.WaterM3 * EmissionWater);
+    }
+
+    private async Task SaveEdit()
+    {
+        if (editModel == null) return;
+        editModel.CarbonKgCO2e = Math.Round(editCarbon, 2);
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var existing = await db.EnergyRecords.FindAsync(editModel.Id);
+        if (existing != null)
+        {
+            existing.MeterName     = editModel.MeterName;
+            existing.kWh           = Math.Round(editModel.kWh, 2);
+            existing.WaterM3       = Math.Round(editModel.WaterM3, 2);
+            existing.CarbonKgCO2e  = editModel.CarbonKgCO2e;
+            await db.SaveChangesAsync();
+        }
+
+        showEdit = false;
+        await LoadData();
+    }
+
+    // ---- Delete ----
+    private void OpenDelete(EnergyRecord r)
+    {
+        deleteTarget = r;
+        showDelete = true;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (deleteTarget == null) return;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var existing = await db.EnergyRecords.FindAsync(deleteTarget.Id);
+        if (existing != null)
+        {
+            db.EnergyRecords.Remove(existing);
+            await db.SaveChangesAsync();
+        }
+
+        showDelete = false;
+        await LoadData();
     }
 }
