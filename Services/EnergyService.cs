@@ -74,4 +74,22 @@ public class EnergyService
             .Select(g => new { Meter = g.Key, Total = g.Sum(r => r.WaterM3) })
             .ToDictionaryAsync(x => x.Meter, x => x.Total);
     }
+
+    public async Task UpsertKpiTargetAsync(KpiTarget target)
+    {
+        var existing = await _db.KpiTargets
+            .FirstOrDefaultAsync(x => x.MeterName == target.MeterName);
+
+        if (existing is null)
+            _db.KpiTargets.Add(target);
+        else
+        {
+            existing.EnergyTarget = target.EnergyTarget;
+            existing.EnergyThreshold = target.EnergyThreshold;
+            existing.WaterTarget = target.WaterTarget;
+            existing.WaterThreshold = target.WaterThreshold;
+        }
+
+        await _db.SaveChangesAsync();
+    }
 }

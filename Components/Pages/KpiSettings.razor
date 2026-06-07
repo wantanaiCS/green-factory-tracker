@@ -1,0 +1,97 @@
+@page "/kpi-settings"
+@using GreenFactory.Services
+@using GreenFactory.Models
+@inject EnergyService EnergyService
+@inject ISnackbar Snackbar
+@rendermode InteractiveServer
+
+<PageTitle>ตั้งค่า KPI - Green Factory</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-1">⚙️ ตั้งค่า KPI Target</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-5">
+    แก้ไขค่า Target และ Threshold ของแต่ละ Line ได้เลย
+</MudText>
+
+@if (isLoading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+}
+else
+{
+    <MudCard Elevation="3">
+        <MudCardContent>
+            <MudTable Items="targets" Hover="true" Striped="true" Dense="true">
+                <HeaderContent>
+                    <MudTh>Meter / Line</MudTh>
+                    <MudTh>Energy Target (kWh)</MudTh>
+                    <MudTh>Energy Threshold (kWh)</MudTh>
+                    <MudTh>Water Target (ลบ.ม.)</MudTh>
+                    <MudTh>Water Threshold (ลบ.ม.)</MudTh>
+                    <MudTh>บันทึก</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>
+                        <MudChip T="string" Color="Color.Primary" Size="Size.Small">
+                            @context.MeterName
+                        </MudChip>
+                    </MudTd>
+                    <MudTd>
+                        <MudNumericField @bind-Value="context.EnergyTarget"
+                                         Variant="Variant.Outlined"
+                                         Min="0" Format="N0" />
+                    </MudTd>
+                    <MudTd>
+                        <MudNumericField @bind-Value="context.EnergyThreshold"
+                                         Variant="Variant.Outlined"
+                                         Min="0" Format="N0" />
+                    </MudTd>
+                    <MudTd>
+                        <MudNumericField @bind-Value="context.WaterTarget"
+                                         Variant="Variant.Outlined"
+                                         Min="0" Format="N0" />
+                    </MudTd>
+                    <MudTd>
+                        <MudNumericField @bind-Value="context.WaterThreshold"
+                                         Variant="Variant.Outlined"
+                                         Min="0" Format="N0" />
+                    </MudTd>
+                    <MudTd>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                   Size="Size.Small" StartIcon="@Icons.Material.Filled.Save"
+                                   OnClick="@(() => SaveAsync(context))">
+                            บันทึก
+                        </MudButton>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudCardContent>
+    </MudCard>
+}
+
+@code {
+    private bool isLoading = true;
+    private List<KpiTarget> targets = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        targets   = await EnergyService.GetKpiTargetsAsync();
+        isLoading = false;
+    }
+
+    private async Task SaveAsync(KpiTarget target)
+    {
+        if (target.EnergyThreshold <= target.EnergyTarget)
+        {
+            Snackbar.Add($"{target.MeterName}: Energy Threshold ต้องมากกว่า Target", Severity.Warning);
+            return;
+        }
+        if (target.WaterThreshold <= target.WaterTarget)
+        {
+            Snackbar.Add($"{target.MeterName}: Water Threshold ต้องมากกว่า Target", Severity.Warning);
+            return;
+        }
+
+        await EnergyService.UpsertKpiTargetAsync(target);
+        Snackbar.Add($"✅ บันทึก {target.MeterName} สำเร็จ", Severity.Success);
+    }
+}

@@ -2,6 +2,7 @@ using GreenFactory.Components;
 using GreenFactory.Data;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
+using GreenFactory.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +18,8 @@ builder.Services.AddMudServices();
 // เพิ่ม EF Core + SQLite
 builder.Services.AddDbContextFactory<AppDbContext>(options =>
     options.UseSqlite("Data Source=greenfactory.db"));
+
+builder.Services.AddScoped<IKpiService, KpiService>();
 
 var app = builder.Build();
 
