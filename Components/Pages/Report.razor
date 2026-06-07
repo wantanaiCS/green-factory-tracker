@@ -1,0 +1,137 @@
+@page "/report"
+@rendermode InteractiveServer
+@using GreenFactory.Services
+@using GreenFactory.Models
+@inject EnergyService EnergyService
+
+<PageTitle>รายงาน - Green Factory</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-1">รายงาน</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-5">
+    ประวัติการใช้พลังงานและ Carbon ย้อนหลัง 7 วัน
+</MudText>
+
+@if (isLoading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+}
+else
+{
+    <!-- กราฟ Trend -->
+    <MudGrid Spacing="3" Class="mb-6">
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">⚡ Trend พลังงาน (kWh) รายวัน</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudChart ChartType="ChartType.Line"
+                              ChartSeries="@energySeries"
+                              XAxisLabels="@dateLabels"
+                              Width="100%" Height="250px" />
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">☁️ Trend Carbon (kgCO₂e) รายวัน</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudChart ChartType="ChartType.Line"
+                              ChartSeries="@carbonSeries"
+                              XAxisLabels="@dateLabels"
+                              Width="100%" Height="250px" />
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+
+    <!-- ตารางประวัติ -->
+    <MudCard Elevation="3">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">📋 ประวัติการบันทึกข้อมูล</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudTable Items="records" Hover="true" Striped="true" Dense="true"
+                      SortLabel="Sort By" AllowUnsorted="false">
+                <HeaderContent>
+                    <MudTh><MudTableSortLabel SortBy="new Func<EnergyRecord, object>(x => x.Timestamp)">วันที่/เวลา</MudTableSortLabel></MudTh>
+                    <MudTh>Line</MudTh>
+                    <MudTh><MudTableSortLabel SortBy="new Func<EnergyRecord, object>(x => x.kWh)">kWh</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel SortBy="new Func<EnergyRecord, object>(x => x.WaterM3)">น้ำ (ลบ.ม.)</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel SortBy="new Func<EnergyRecord, object>(x => x.CarbonKgCO2e)">Carbon (kgCO₂e)</MudTableSortLabel></MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.Timestamp.ToString("dd/MM/yyyy HH:mm")</MudTd>
+                    <MudTd><MudChip T="string" Color="Color.Primary" Size="Size.Small">@context.MeterName</MudChip></MudTd>
+                    <MudTd>@context.kWh.ToString("N2")</MudTd>
+                    <MudTd>@context.WaterM3.ToString("N2")</MudTd>
+                    <MudTd>@context.CarbonKgCO2e.ToString("N2")</MudTd>
+                </RowTemplate>
+                <PagerContent>
+                    <MudTablePager PageSizeOptions="new int[]{10, 25, 50}" />
+                </PagerContent>
+            </MudTable>
+        </MudCardContent>
+    </MudCard>
+}
+
+@code {
+    private bool isLoading = true;
+    private List<EnergyRecord> records = new();
+    private string[] dateLabels = Array.Empty<string>();
+    private List<ChartSeries<double>> energySeries = new();
+    private List<ChartSeries<double>> carbonSeries = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        records = await EnergyService.GetRecentRecordsAsync(50);
+
+        // สร้างข้อมูลกราฟ Trend 7 วัน
+        var last7Days = Enumerable.Range(0, 7)
+            .Select(i => DateTime.Today.AddDays(-6 + i))
+            .ToList();
+
+        dateLabels = last7Days
+            .Select(d => d.ToString("dd/MM"))
+            .ToArray();
+
+        var allRecords = await EnergyService.GetRecentRecordsAsync(500);
+
+        energySeries = new List<ChartSeries<double>>
+        {
+            new ChartSeries<double>
+            {
+                Name = "พลังงาน (kWh)",
+                Data = last7Days.Select(day =>
+                    allRecords
+                        .Where(r => r.Timestamp.Date == day.Date)
+                        .Sum(r => r.kWh)
+                ).ToArray()
+            }
+        };
+
+        carbonSeries = new List<ChartSeries<double>>
+        {
+            new ChartSeries<double>
+            {
+                Name = "Carbon (kgCO₂e)",
+                Data = last7Days.Select(day =>
+                    allRecords
+                        .Where(r => r.Timestamp.Date == day.Date)
+                        .Sum(r => r.CarbonKgCO2e)
+                ).ToArray()
+            }
+        };
+
+        isLoading = false;
+    }
+}

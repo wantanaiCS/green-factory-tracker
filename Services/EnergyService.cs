@@ -48,4 +48,12 @@ public class EnergyService
     {
         return await _db.KpiTargets.ToListAsync();
     }
+
+    public async Task<List<EnergyRecord>> GetRecentRecordsAsync(int limit = 50)
+    {
+        return await _db.EnergyRecords
+            .OrderByDescending(r => r.Timestamp)
+            .Take(limit)
+            .ToListAsync();
+    }
 }
