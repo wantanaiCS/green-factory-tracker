@@ -1,0 +1,106 @@
+﻿@page "/"
+@using GreenFactory.Services
+@using GreenFactory.Models
+@inject EnergyService EnergyService
+@rendermode InteractiveServer
+
+<PageTitle>Dashboard - Green Factory</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-1">Dashboard</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-5">
+    อัปเดตล่าสุด: @DateTime.Now.ToString("dd MMM yyyy HH:mm")
+</MudText>
+
+@if (isLoading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+}
+else
+{
+    <!-- Summary Cards -->
+    <MudGrid Spacing="3">
+        <MudItem xs="12" sm="4">
+            <MudCard Elevation="3" Style="border-left: 5px solid #FFA726;">
+                <MudCardContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center">
+                        <MudIcon Icon="@Icons.Material.Filled.ElectricBolt" Color="Color.Warning" Size="Size.Large" />
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">พลังงานวันนี้</MudText>
+                            <MudText Typo="Typo.h5"><b>@todayKwh.ToString("N1")</b> kWh</MudText>
+                        </MudStack>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="4">
+            <MudCard Elevation="3" Style="border-left: 5px solid #29B6F6;">
+                <MudCardContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center">
+                        <MudIcon Icon="@Icons.Material.Filled.WaterDrop" Color="Color.Info" Size="Size.Large" />
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">น้ำวันนี้</MudText>
+                            <MudText Typo="Typo.h5"><b>@todayWater.ToString("N1")</b> ลบ.ม.</MudText>
+                        </MudStack>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="4">
+            <MudCard Elevation="3" Style="border-left: 5px solid #66BB6A;">
+                <MudCardContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center">
+                        <MudIcon Icon="@Icons.Material.Filled.Cloud" Color="Color.Success" Size="Size.Large" />
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Carbon วันนี้</MudText>
+                            <MudText Typo="Typo.h5"><b>@todayCarbon.ToString("N1")</b> kgCO₂e</MudText>
+                        </MudStack>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+
+    <!-- KPI Table -->
+    <MudCard Elevation="3" Class="mt-6">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">📊 KPI Status — ทุก Line</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudTable Items="kpiTargets" Hover="true" Striped="true" Dense="true">
+                <HeaderContent>
+                    <MudTh>Meter</MudTh>
+                    <MudTh>Energy Target</MudTh>
+                    <MudTh>Energy Threshold</MudTh>
+                    <MudTh>Water Target</MudTh>
+                    <MudTh>Water Threshold</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd><MudChip T="string" Color="Color.Primary" Size="Size.Small">@context.MeterName</MudChip></MudTd>
+                    <MudTd>@context.EnergyTarget kWh</MudTd>
+                    <MudTd><MudText Color="Color.Error">@context.EnergyThreshold kWh</MudText></MudTd>
+                    <MudTd>@context.WaterTarget ลบ.ม.</MudTd>
+                    <MudTd><MudText Color="Color.Error">@context.WaterThreshold ลบ.ม.</MudText></MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudCardContent>
+    </MudCard>
+}
+
+@code {
+    private bool isLoading = true;
+    private double todayKwh, todayWater, todayCarbon;
+    private List<KpiTarget> kpiTargets = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        todayKwh    = await EnergyService.GetTodayTotalKwhAsync();
+        todayWater  = await EnergyService.GetTodayTotalWaterAsync();
+        todayCarbon = await EnergyService.GetTodayTotalCarbonAsync();
+        kpiTargets  = await EnergyService.GetKpiTargetsAsync();
+        isLoading   = false;
+    }
+}

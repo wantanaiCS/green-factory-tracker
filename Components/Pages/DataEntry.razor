@@ -1,0 +1,123 @@
+@page "/data-entry"
+@page "/entry"
+@rendermode InteractiveServer
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject NavigationManager Nav
+
+<MudText Typo="Typo.h5" Class="mb-4">บันทึกข้อมูล</MudText>
+
+<MudCard Style="max-width:560px;">
+    <MudCardContent>
+
+        <MudSelect T="string" Label="Line / มิเตอร์" @bind-Value="model.MeterName"
+                   Variant="Variant.Outlined" Class="mb-4" Required="true">
+            <MudSelectItem Value="@("Line A")" />
+            <MudSelectItem Value="@("Line B")" />
+            <MudSelectItem Value="@("Line C")" />
+        </MudSelect>
+
+        <MudDatePicker Label="วันที่" @bind-Date="selectedDate"
+                       Variant="Variant.Outlined" Class="mb-4" />
+
+        <MudNumericField T="double" Label="พลังงาน (kWh)" @bind-Value="model.kWh"
+                         @bind-Value:after="RecalcCarbon"
+                         Variant="Variant.Outlined" Class="mb-4"
+                         Min="0" Step="0.1" />
+
+        <MudNumericField T="double" Label="น้ำ (ลบ.ม.)" @bind-Value="model.WaterM3"
+                         @bind-Value:after="RecalcCarbon"
+                         Variant="Variant.Outlined" Class="mb-4"
+                         Min="0" Step="0.1" />
+
+        @* แสดง Carbon ที่คำนวณ preview *@
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            Carbon ที่คาดการณ์: <strong>@carbonPreview.ToString("F2") kgCO₂e</strong>
+        </MudAlert>
+
+        @if (!string.IsNullOrEmpty(errorMsg))
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-2">@errorMsg</MudAlert>
+        }
+        @if (saved)
+        {
+            <MudAlert Severity="Severity.Success" Class="mb-2">บันทึกสำเร็จ!</MudAlert>
+        }
+
+    </MudCardContent>
+
+    <MudCardActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   OnClick="HandleSubmit" Disabled="isSaving">
+            @(isSaving ? "กำลังบันทึก..." : "บันทึกข้อมูล")
+        </MudButton>
+        <MudButton Variant="Variant.Text" OnClick="ResetForm" Class="ml-2">
+            ล้างฟอร์ม
+        </MudButton>
+    </MudCardActions>
+</MudCard>
+
+@code {
+    // Emission Factors (อ้างอิง EGAT / การประปา)
+    const double EmissionElec  = 0.4999; // kgCO₂e per kWh
+    const double EmissionWater = 0.708;  // kgCO₂e per ลบ.ม.
+
+    private EnergyRecord model = new();
+    private DateTime? selectedDate = DateTime.Today;
+    private double carbonPreview;
+    private string errorMsg = "";
+    private bool saved;
+    private bool isSaving;
+
+    private void RecalcCarbon()
+    {
+        carbonPreview = (model.kWh * EmissionElec) + (model.WaterM3 * EmissionWater);
+    }
+
+    private async Task HandleSubmit()
+    {
+        errorMsg = "";
+        saved = false;
+
+        if (string.IsNullOrWhiteSpace(model.MeterName))
+        {
+            errorMsg = "กรุณาเลือก Line / มิเตอร์";
+            return;
+        }
+        if (model.kWh <= 0 && model.WaterM3 <= 0)
+        {
+            errorMsg = "กรุณากรอกค่า kWh หรือน้ำอย่างน้อยหนึ่งอย่าง";
+            return;
+        }
+
+        isSaving = true;
+
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            model.Timestamp = (selectedDate ?? DateTime.Today).Date.AddHours(DateTime.Now.Hour);
+            model.CarbonKgCO2e = Math.Round(carbonPreview, 2);
+            model.kWh = Math.Round(model.kWh, 2);
+            model.WaterM3 = Math.Round(model.WaterM3, 2);
+            db.EnergyRecords.Add(model);
+            await db.SaveChangesAsync();
+            saved = true;
+            ResetForm();
+        }
+        catch (Exception ex)
+        {
+            errorMsg = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void ResetForm()
+    {
+        model = new EnergyRecord { MeterName = model.MeterName }; // คง Line ที่เลือกไว้
+        selectedDate = DateTime.Today;
+        carbonPreview = 0;
+        errorMsg = "";
+    }
+}

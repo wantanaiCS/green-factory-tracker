@@ -1,0 +1,48 @@
+﻿@inherits LayoutComponentBase
+
+<MudThemeProvider Theme="_greenTheme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1" Color="Color.Primary">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+            OnClick="@(() => _drawerOpen = !_drawerOpen)" />
+        <MudText Typo="Typo.h6" Class="ml-2">🌿 Green Factory</MudText>
+        <MudSpacer />
+        <MudText Typo="Typo.body2" Class="mr-3">Carbon & Energy Tracker</MudText>
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_drawerOpen" Elevation="2" Variant="DrawerVariant.Responsive">
+        <MudDrawerHeader>
+            <MudText Typo="Typo.h6" Color="Color.Primary">🏭 เมนูหลัก</MudText>
+        </MudDrawerHeader>
+        <MudNavMenu>
+            <MudNavLink Href="/" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
+            <MudNavLink Href="/entry" Icon="@Icons.Material.Filled.AddCircle">บันทึกข้อมูล</MudNavLink>
+            <MudNavLink Href="/report" Icon="@Icons.Material.Filled.BarChart">รายงาน</MudNavLink>
+        </MudNavMenu>
+    </MudDrawer>
+
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-6">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+
+    private MudTheme _greenTheme = new MudTheme
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#2E7D32",
+            Secondary = "#66BB6A",
+            AppbarBackground = "#2E7D32",
+            Background = "#F5F5F5",
+        }
+    };
+}
