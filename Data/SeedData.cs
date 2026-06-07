@@ -8,25 +8,30 @@ public static class SeedData
     {
         if (context.EnergyRecords.Any()) return;
 
-        var random = new Random();
+        var random = new Random(42);
         var meters = new[] { "Line A", "Line B", "Line C" };
         var records = new List<EnergyRecord>();
 
-        foreach (var meter in meters)
+        // ข้อมูลย้อนหลัง 30 วัน
+        for (int i = 30; i >= 0; i--)
         {
-            double kwh = random.NextDouble() * 500 + 200;
-            double water = random.NextDouble() * 50 + 10;
-            double carbon = (kwh * 0.4999) + (water * 0.708);
-
-            records.Add(new EnergyRecord
+            var date = DateTime.Today.AddDays(-i);
+            foreach (var meter in meters)
             {
-                Timestamp = DateTime.Today.AddHours(8),
-                MeterName = meter,
-                kWh = Math.Round(kwh, 2),
-                WaterM3 = Math.Round(water, 2),
-                CarbonKgCO2e = Math.Round(carbon, 2)
-            });
-        } 
+                double kwh = Math.Round(random.NextDouble() * 400 + 200, 2); // 200-600
+                double water = Math.Round(random.NextDouble() * 40 + 10, 2);   // 10-50
+                double carbon = Math.Round((kwh * 0.4999) + (water * 0.708), 2);
+
+                records.Add(new EnergyRecord
+                {
+                    Timestamp = date.AddHours(8),
+                    MeterName = meter,
+                    kWh = kwh,
+                    WaterM3 = water,
+                    CarbonKgCO2e = carbon
+                });
+            }
+        }
 
         // KPI Targets
         var targets = meters.Select(m => new KpiTarget
