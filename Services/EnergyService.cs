@@ -56,4 +56,22 @@ public class EnergyService
             .Take(limit)
             .ToListAsync();
     }
+
+    public async Task<Dictionary<string, double>> GetTodayKwhByMeterAsync()
+    {
+        return await _db.EnergyRecords
+            .Where(r => r.Timestamp.Date == DateTime.Today)
+            .GroupBy(r => r.MeterName)
+            .Select(g => new { Meter = g.Key, Total = g.Sum(r => r.kWh) })
+            .ToDictionaryAsync(x => x.Meter, x => x.Total);
+    }
+
+    public async Task<Dictionary<string, double>> GetTodayWaterByMeterAsync()
+    {
+        return await _db.EnergyRecords
+            .Where(r => r.Timestamp.Date == DateTime.Today)
+            .GroupBy(r => r.MeterName)
+            .Select(g => new { Meter = g.Key, Total = g.Sum(r => r.WaterM3) })
+            .ToDictionaryAsync(x => x.Meter, x => x.Total);
+    }
 }

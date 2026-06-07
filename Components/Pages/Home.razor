@@ -73,17 +73,41 @@ else
             <MudTable Items="kpiTargets" Hover="true" Striped="true" Dense="true">
                 <HeaderContent>
                     <MudTh>Meter</MudTh>
+                    <MudTh>พลังงานวันนี้</MudTh>
                     <MudTh>Energy Target</MudTh>
                     <MudTh>Energy Threshold</MudTh>
+                    <MudTh>น้ำวันนี้</MudTh>
                     <MudTh>Water Target</MudTh>
                     <MudTh>Water Threshold</MudTh>
+                    <MudTh>สถานะ</MudTh>
                 </HeaderContent>
                 <RowTemplate>
+                    @{
+                        var kwh = todayKwhByMeter.GetValueOrDefault(context.MeterName, 0);
+                        var water = todayWaterByMeter.GetValueOrDefault(context.MeterName, 0);
+
+                        // Energy status
+                        Color energyColor = kwh <= context.EnergyTarget ? Color.Success
+                            : kwh <= context.EnergyThreshold ? Color.Warning : Color.Error;
+
+                        // Water status
+                        Color waterColor = water <= context.WaterTarget ? Color.Success
+                            : water <= context.WaterThreshold ? Color.Warning : Color.Error;
+
+                        // Overall status
+                        bool isAlert = kwh > context.EnergyThreshold || water > context.WaterThreshold;
+                        bool isWarn  = !isAlert && (kwh > context.EnergyTarget || water > context.WaterTarget);
+                        string statusIcon = isAlert ? "🔴 เกิน" : isWarn ? "🟡 เฝ้าระวัง" : "🟢 ปกติ";
+                        Color statusColor = isAlert ? Color.Error : isWarn ? Color.Warning : Color.Success;
+                    }
                     <MudTd><MudChip T="string" Color="Color.Primary" Size="Size.Small">@context.MeterName</MudChip></MudTd>
+                    <MudTd><MudText Color="@energyColor"><b>@kwh.ToString("N1")</b> kWh</MudText></MudTd>
                     <MudTd>@context.EnergyTarget kWh</MudTd>
-                    <MudTd><MudText Color="Color.Error">@context.EnergyThreshold kWh</MudText></MudTd>
+                    <MudTd>@context.EnergyThreshold kWh</MudTd>
+                    <MudTd><MudText Color="@waterColor"><b>@water.ToString("N1")</b> ลบ.ม.</MudText></MudTd>
                     <MudTd>@context.WaterTarget ลบ.ม.</MudTd>
-                    <MudTd><MudText Color="Color.Error">@context.WaterThreshold ลบ.ม.</MudText></MudTd>
+                    <MudTd>@context.WaterThreshold ลบ.ม.</MudTd>
+                    <MudTd><MudText Color="@statusColor"><b>@statusIcon</b></MudText></MudTd>
                 </RowTemplate>
             </MudTable>
         </MudCardContent>
@@ -94,6 +118,8 @@ else
     private bool isLoading = true;
     private double todayKwh, todayWater, todayCarbon;
     private List<KpiTarget> kpiTargets = new();
+    private Dictionary<string, double> todayKwhByMeter = new();
+    private Dictionary<string, double> todayWaterByMeter = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -101,6 +127,8 @@ else
         todayWater  = await EnergyService.GetTodayTotalWaterAsync();
         todayCarbon = await EnergyService.GetTodayTotalCarbonAsync();
         kpiTargets  = await EnergyService.GetKpiTargetsAsync();
+        todayKwhByMeter   = await EnergyService.GetTodayKwhByMeterAsync();
+        todayWaterByMeter = await EnergyService.GetTodayWaterByMeterAsync();
         isLoading   = false;
     }
 }
