@@ -66,16 +66,48 @@ else
             </MudTable>
         </MudCardContent>
     </MudCard>
+
+    <MudCard Elevation="3" Class="mt-6">
+        <MudCardContent>
+            <MudText Typo="Typo.h6" Class="mb-4">⚡ Carbon Emission Factor</MudText>
+            <MudGrid>
+                <MudItem xs="12" md="4">
+                    <MudNumericField @bind-Value="emissionElec"
+                                     Label="ไฟฟ้า (kgCO₂e / kWh)"
+                                     Variant="Variant.Outlined"
+                                     Min="0" Format="N4" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudNumericField @bind-Value="emissionWater"
+                                     Label="น้ำ (kgCO₂e / ลบ.ม.)"
+                                     Variant="Variant.Outlined"
+                                     Min="0" Format="N4" />
+                </MudItem>
+                <MudItem xs="12" md="4" Class="d-flex align-end">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Save"
+                               OnClick="SaveFactors">
+                        บันทึก Factor
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudCardContent>
+    </MudCard>
 }
 
 @code {
     private bool isLoading = true;
     private List<KpiTarget> targets = new();
 
+    private double emissionElec;
+    private double emissionWater;
+
     protected override async Task OnInitializedAsync()
     {
-        targets   = await EnergyService.GetKpiTargetsAsync();
-        isLoading = false;
+        targets       = await EnergyService.GetKpiTargetsAsync();
+        emissionElec  = await EnergyService.GetSettingAsync("EmissionElec", 0.4999);
+        emissionWater = await EnergyService.GetSettingAsync("EmissionWater", 0.708);
+        isLoading     = false;
     }
 
     private async Task SaveAsync(KpiTarget target)
@@ -93,5 +125,12 @@ else
 
         await EnergyService.UpsertKpiTargetAsync(target);
         Snackbar.Add($"✅ บันทึก {target.MeterName} สำเร็จ", Severity.Success);
+    }
+
+    private async Task SaveFactors()
+    {
+        await EnergyService.UpsertSettingAsync("EmissionElec",  emissionElec,  "ค่า Emission Factor ไฟฟ้า");
+        await EnergyService.UpsertSettingAsync("EmissionWater", emissionWater, "ค่า Emission Factor น้ำ");
+        Snackbar.Add("✅ บันทึก Carbon Factor สำเร็จ", Severity.Success);
     }
 }

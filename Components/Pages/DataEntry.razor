@@ -1,8 +1,11 @@
 @page "/data-entry"
 @page "/entry"
 @rendermode InteractiveServer
+@using GreenFactory.Services
+@using GreenFactory.Models
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject NavigationManager Nav
+@inject EnergyService EnergyService
 
 <MudText Typo="Typo.h5" Class="mb-4">บันทึกข้อมูล</MudText>
 
@@ -29,7 +32,6 @@
                          Variant="Variant.Outlined" Class="mb-4"
                          Min="0" Step="0.1" />
 
-        @* แสดง Carbon ที่คำนวณ preview *@
         <MudAlert Severity="Severity.Info" Class="mb-4">
             Carbon ที่คาดการณ์: <strong>@carbonPreview.ToString("F2") kgCO₂e</strong>
         </MudAlert>
@@ -57,9 +59,14 @@
 </MudCard>
 
 @code {
-    // Emission Factors (อ้างอิง EGAT / การประปา)
-    const double EmissionElec  = 0.4999; // kgCO₂e per kWh
-    const double EmissionWater = 0.708;  // kgCO₂e per ลบ.ม.
+    private double EmissionElec;
+    private double EmissionWater;
+
+    protected override async Task OnInitializedAsync()
+    {
+        EmissionElec  = await EnergyService.GetSettingAsync("EmissionElec", 0.4999);
+        EmissionWater = await EnergyService.GetSettingAsync("EmissionWater", 0.708);
+    }
 
     private EnergyRecord model = new();
     private DateTime? selectedDate = DateTime.Today;
@@ -115,7 +122,7 @@
 
     private void ResetForm()
     {
-        model = new EnergyRecord { MeterName = model.MeterName }; // คง Line ที่เลือกไว้
+        model = new EnergyRecord { MeterName = model.MeterName };
         selectedDate = DateTime.Today;
         carbonPreview = 0;
         errorMsg = "";

@@ -21,6 +21,15 @@
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+
+    <script>
+    window.downloadFile = (base64, fileName) => {
+        const link = document.createElement('a');
+        link.href = 'data:text/csv;base64,' + base64;
+        link.download = fileName;
+        link.click();
+    };
+    </script>
 </body>
 
 </html>

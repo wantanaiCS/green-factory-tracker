@@ -9,4 +9,5 @@ public class AppDbContext : DbContext
 
     public DbSet<EnergyRecord> EnergyRecords => Set<EnergyRecord>();
     public DbSet<KpiTarget> KpiTargets => Set<KpiTarget>();
+    public DbSet<AppSetting> AppSettings => Set<AppSetting>();
 }

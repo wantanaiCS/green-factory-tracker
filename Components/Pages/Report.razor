@@ -2,8 +2,10 @@
 @rendermode InteractiveServer
 @using GreenFactory.Services
 @using GreenFactory.Models
+@using Microsoft.EntityFrameworkCore @* 👈 เพิ่มการเรียกใช้ EF Core *@
 @inject EnergyService EnergyService
 @inject IDbContextFactory<AppDbContext> DbFactory
+@inject IJSRuntime JS
 
 <PageTitle>รายงาน - Green Factory</PageTitle>
 
@@ -18,7 +20,6 @@
 }
 else
 {
-    <!-- กราฟ Trend -->
     <MudGrid Spacing="3" Class="mb-6">
         <MudItem xs="12" md="6">
             <MudCard Elevation="3">
@@ -30,7 +31,7 @@ else
                 <MudCardContent>
                     <MudChart ChartType="ChartType.Line"
                               ChartSeries="@energySeries"
-                              XAxisLabels="@dateLabels"
+                              ChartOptions="@chartOptions"
                               Width="100%" Height="250px" />
                 </MudCardContent>
             </MudCard>
@@ -45,19 +46,25 @@ else
                 <MudCardContent>
                     <MudChart ChartType="ChartType.Line"
                               ChartSeries="@carbonSeries"
-                              XAxisLabels="@dateLabels"
+                              ChartOptions="@chartOptions"
                               Width="100%" Height="250px" />
                 </MudCardContent>
             </MudCard>
         </MudItem>
     </MudGrid>
 
-    <!-- ตารางประวัติ -->
     <MudCard Elevation="3">
         <MudCardHeader>
             <CardHeaderContent>
                 <MudText Typo="Typo.h6">📋 ประวัติการบันทึกข้อมูล</MudText>
             </CardHeaderContent>
+            <CardHeaderActions>
+                <MudButton StartIcon="@Icons.Material.Filled.Download"
+                           Variant="Variant.Outlined" Color="Color.Primary"
+                           Size="Size.Small" OnClick="ExportCsv">
+                    Export CSV
+                </MudButton>
+            </CardHeaderActions>
         </MudCardHeader>
         <MudCardContent>
             <MudTable Items="records" Hover="true" Striped="true" Dense="true"
@@ -93,7 +100,6 @@ else
     </MudCard>
 }
 
-<!-- Dialog แก้ไข -->
 <MudDialog @bind-Visible="showEdit">
     <TitleContent>✏️ แก้ไขข้อมูล</TitleContent>
     <DialogContent>
@@ -122,7 +128,6 @@ else
     </DialogActions>
 </MudDialog>
 
-<!-- Dialog ยืนยันลบ -->
 <MudDialog @bind-Visible="showDelete">
     <TitleContent>🗑️ ยืนยันการลบ</TitleContent>
     <DialogContent>
@@ -135,21 +140,20 @@ else
 </MudDialog>
 
 @code {
-    const double EmissionElec  = 0.4999;
-    const double EmissionWater = 0.708;
+    // ✅ เปลี่ยนจาก const เป็นตัวแปรธรรมดา และกำหนดค่าเริ่มต้นสำรองไว้
+    private double emissionElec = 0.4999;
+    private double emissionWater = 0.7080;
 
     private bool isLoading = true;
     private List<EnergyRecord> records = new();
-    private string[] dateLabels = Array.Empty<string>();
     private List<ChartSeries<double>> energySeries = new();
     private List<ChartSeries<double>> carbonSeries = new();
+    private ChartOptions chartOptions = new();
 
-    // Edit
     private bool showEdit;
     private EnergyRecord? editModel;
     private double editCarbon;
 
-    // Delete
     private bool showDelete;
     private EnergyRecord? deleteTarget;
 
@@ -160,10 +164,19 @@ else
         isLoading = true;
         records = await EnergyService.GetRecentRecordsAsync(50);
 
+        // 🔍 ดึงค่า Factor มาจากตาราง AppSettings ในฐานข้อมูลแบบ Real-time
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            var elecSetting = await db.AppSettings.FirstOrDefaultAsync(s => s.Key == "EmissionElec");
+            var waterSetting = await db.AppSettings.FirstOrDefaultAsync(s => s.Key == "EmissionWater");
+
+            if (elecSetting != null) emissionElec = elecSetting.Value;
+            if (waterSetting != null) emissionWater = waterSetting.Value;
+        }
+
         var last7Days = Enumerable.Range(0, 7)
             .Select(i => DateTime.Today.AddDays(-6 + i)).ToList();
-
-        dateLabels = last7Days.Select(d => d.ToString("dd/MM")).ToArray();
+        chartOptions = new ChartOptions();
 
         var allRecords = await EnergyService.GetRecentRecordsAsync(500);
 
@@ -188,11 +201,9 @@ else
                 ).ToArray()
             }
         };
-
         isLoading = false;
     }
 
-    // ---- Edit ----
     private void OpenEdit(EnergyRecord r)
     {
         editModel = new EnergyRecord
@@ -209,7 +220,8 @@ else
     private void RecalcEdit()
     {
         if (editModel == null) return;
-        editCarbon = (editModel.kWh * EmissionElec) + (editModel.WaterM3 * EmissionWater);
+        // ✅ เปลี่ยนมาคำนวณตามตัวแปรที่ดึงมาจากฐานข้อมูลแล้ว
+        editCarbon = (editModel.kWh * emissionElec) + (editModel.WaterM3 * emissionWater);
     }
 
     private async Task SaveEdit()
@@ -232,7 +244,6 @@ else
         await LoadData();
     }
 
-    // ---- Delete ----
     private void OpenDelete(EnergyRecord r)
     {
         deleteTarget = r;
@@ -242,7 +253,6 @@ else
     private async Task ConfirmDelete()
     {
         if (deleteTarget == null) return;
-
         await using var db = await DbFactory.CreateDbContextAsync();
         var existing = await db.EnergyRecords.FindAsync(deleteTarget.Id);
         if (existing != null)
@@ -253,5 +263,24 @@ else
 
         showDelete = false;
         await LoadData();
+    }
+
+    private async Task ExportCsv()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("วันที่/เวลา,Line,kWh,น้ำ (ลบ.ม.),Carbon (kgCO2e)");
+
+        foreach (var r in records)
+        {
+            sb.AppendLine($"{r.Timestamp:dd/MM/yyyy HH:mm},{r.MeterName},{r.kWh:N2},{r.WaterM3:N2},{r.CarbonKgCO2e:N2}");
+        }
+
+        var bytes = System.Text.Encoding.UTF8.GetPreamble()
+            .Concat(System.Text.Encoding.UTF8.GetBytes(sb.ToString()))
+            .ToArray();
+        var base64 = Convert.ToBase64String(bytes);
+        var fileName = $"GreenFactory_{DateTime.Today:yyyyMMdd}.csv";
+
+        await JS.InvokeVoidAsync("downloadFile", base64, fileName);
     }
 }
